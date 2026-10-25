@@ -1,0 +1,50 @@
+# Follows astli's releases: pins the newest version and tags it. Polling the
+# release rather than being notified by the astli repository needs no token of
+# its own. dist uploads the binaries after it creates the release, so a release
+# is taken only once every archive the action downloads is there.
+name: Bump
+
+on:
+  schedule:
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pin and tag the latest release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release=$(gh api repos/fischeti/astli/releases/latest)
+          latest=$(jq -r '.tag_name | ltrimstr("v")' <<<"$release")
+          current=$(sed -n 's/^    default: \([0-9][^ ]*\)$/\1/p' action.yml)
+          if [ "$(printf '%s\n' "$current" "$latest" | sort -V | tail -n 1)" = "$current" ]; then
+            echo "astli $current is the latest"
+            exit 0
+          fi
+          for target in aarch64-apple-darwin x86_64-apple-darwin \
+            x86_64-unknown-linux-gnu aarch64-unknown-linux-gnu; do
+            assets+=("astli-cli-$target.tar.xz")
+          done
+          assets+=(astli-cli-x86_64-pc-windows-msvc.zip)
+          for asset in "${assets[@]}"; do
+            for name in "$asset" "$asset.sha256"; do
+              if ! jq -e --arg name "$name" 'any(.assets[]; .name == $name)' <<<"$release" >/dev/null; then
+                echo "astli $latest has no $name yet"
+                exit 0
+              fi
+            done
+          done
+          sed -i "s/^    default: $current\$/    default: $latest/" action.yml
+          sed -i "s/astli-action@v$current/astli-action@v$latest/" README.md
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -am "astli $latest"
+          git tag "v$latest"
+          git push origin HEAD "v$latest"
