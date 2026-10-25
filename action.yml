@@ -1,0 +1,62 @@
+name: Set up astli
+description: Install astli, the SystemVerilog toolchain, and cache its dependencies
+author: Tim Fischer
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  version:
+    description: The astli version to install. Each tag of this action installs the astli release of the same version.
+    default: 0.4.0
+  cache:
+    description: Whether to cache the git dependencies astli downloads.
+    default: 'true'
+  cache-dependency-path:
+    description: The lock file whose hash keys the cache. Nothing is cached when it does not exist.
+    default: astli.lock
+  annotations:
+    description: Whether astli writes diagnostics as workflow commands, which annotate the pull request.
+    default: 'true'
+
+outputs:
+  version:
+    description: The astli version installed.
+    value: ${{ steps.install.outputs.version }}
+  cache-hit:
+    description: Whether the cache was restored from an exact key match.
+    value: ${{ steps.cache.outputs.cache-hit }}
+
+runs:
+  using: composite
+  steps:
+    - id: install
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"
+
+    - shell: bash
+      env:
+        CACHE: ${{ inputs.cache }}
+        CACHE_DIR: ${{ runner.temp }}/astli-cache
+        ANNOTATIONS: ${{ inputs.annotations }}
+        VERSION: ${{ steps.install.outputs.version }}
+      run: |
+        # One directory on every OS, so that it is the one actions/cache saves.
+        if [ "$CACHE" = true ]; then
+          echo "ASTLI_CACHE_DIR=$CACHE_DIR" >>"$GITHUB_ENV"
+        fi
+        # astli before 0.4.0 rejects the github format.
+        IFS=. read -r major minor _ <<<"$VERSION"
+        if [ "$ANNOTATIONS" = true ] && { [ "$major" -gt 0 ] || [ "$minor" -ge 4 ]; }; then
+          echo "ASTLI_DIAGNOSTICS=github" >>"$GITHUB_ENV"
+        fi
+
+    - id: cache
+      if: inputs.cache == 'true' && hashFiles(inputs.cache-dependency-path) != ''
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/astli-cache
+        key: astli-${{ runner.os }}-${{ hashFiles(inputs.cache-dependency-path) }}
+        restore-keys: astli-${{ runner.os }}-
