@@ -1,0 +1,39 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-15-intel, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - id: astli
+        uses: ./
+        with:
+          # TODO: drop once astli 0.4.0 is released.
+          version: 0.3.0
+          cache-dependency-path: test/astli.lock
+
+      # A second run finds the binary in the tool cache.
+      - uses: ./
+        with:
+          version: ${{ steps.astli.outputs.version }}
+
+      - name: Test
+        shell: bash
+        working-directory: test
+        env:
+          VERSION: ${{ steps.astli.outputs.version }}
+        run: bash ./test.sh

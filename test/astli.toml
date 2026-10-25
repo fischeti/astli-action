@@ -1,0 +1,3 @@
+[lint]
+# rtl/top.sv leaves a signal unused on purpose.
+warn = ["unused-signal"]
