@@ -22,8 +22,6 @@ jobs:
       - id: astli
         uses: ./
         with:
-          # TODO: drop once astli 0.4.0 is released.
-          version: 0.3.0
           cache-dependency-path: test/astli.lock
 
       # A second run finds the binary in the tool cache.
