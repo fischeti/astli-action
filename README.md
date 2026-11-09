@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: fischeti/astli-action@v0.5.0
+      - uses: fischeti/astli-action@v0.5.1
       - run: astli fmt --check
       - run: astli lint --locked
       - run: astli check --locked --top soc_top
