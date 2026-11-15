@@ -20,7 +20,7 @@ Each tag installs the astli release of the same version, so the tag picks the
 formatter and the lint rules, and Dependabot's `github-actions` updates upgrade
 both. Tags follow astli releases within a day.
 
-It runs on Linux (x86_64, aarch64), macOS (x86_64, arm64) and Windows (x86_64).
+It runs on Linux (x86_64, aarch64), macOS (arm64) and Windows (x86_64).
 
 ## Inputs
 
