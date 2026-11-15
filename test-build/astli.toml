@@ -1,0 +1,4 @@
+[package]
+name = "bench"
+
+[top.tb]
