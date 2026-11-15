@@ -23,7 +23,10 @@ jobs:
         run: |
           release=$(gh api repos/fischeti/astli/releases/latest)
           latest=$(jq -r '.tag_name | ltrimstr("v")' <<<"$release")
-          current=$(sed -n 's/^    default: \([0-9][^ ]*\)$/\1/p' action.yml)
+          # The `version` input's default alone, since other inputs have
+          # defaults of their own.
+          version='/^  version:$/,/^  [^ ]/'
+          current=$(sed -n "${version}s/^    default: \\(.*\\)\$/\\1/p" action.yml)
           if [ "$(printf '%s\n' "$current" "$latest" | sort -V | tail -n 1)" = "$current" ]; then
             echo "astli $current is the latest"
             exit 0
@@ -42,7 +45,7 @@ jobs:
             echo "astli $latest has none of $missing yet"
             exit 0
           fi
-          sed -i "s/^    default: $current\$/    default: $latest/" action.yml
+          sed -i "${version}s/^    default: $current\$/    default: $latest/" action.yml
           sed -i "s/astli-action@v$current/astli-action@v$latest/" README.md
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
