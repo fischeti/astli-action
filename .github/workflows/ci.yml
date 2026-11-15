@@ -35,3 +35,67 @@ jobs:
         env:
           VERSION: ${{ steps.astli.outputs.version }}
         run: bash ./test.sh
+
+  # A testbench built again from nothing, as on a new runner, compiles from
+  # ccache, in the directory the build cache saves.
+  build-cache:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./
+        with:
+          build-cache: true
+          build-cache-save: true
+
+      - name: Install Verilator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq verilator
+
+      - name: Test
+        working-directory: test-build
+        run: |
+          astli run | tee run.log
+          grep -q '^built$' run.log
+          rm -rf .astli
+          astli build
+          ccache -s
+          hits=$(ccache --print-stats | awk '$1 == "direct_cache_hit" { print $2 }')
+          if [ "${hits:-0}" -eq 0 ]; then
+            echo "::error::the second build compiled nothing from $CCACHE_DIR"
+            exit 1
+          fi
+
+  # On a new runner, what the job before saved skips the build.
+  build-cache-restored:
+    needs: build-cache
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./
+        with:
+          build-cache: true
+
+      - name: Install Verilator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq verilator
+
+      - name: Test
+        working-directory: test-build
+        run: |
+          # The fingerprint, the executable and the .gitignore beside them.
+          find .astli -type f | sort | tee restored.txt
+          if [ "$(wc -l <restored.txt)" -ne 3 ]; then
+            echo "::error::the restored build holds more or less than it should"
+            exit 1
+          fi
+          astli run 2>run.err | tee run.log
+          cat run.err
+          grep -q '^built$' run.log
+          if grep -q Building run.err; then
+            echo "::error::the restored build was built again"
+            exit 1
+          fi

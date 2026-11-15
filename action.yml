@@ -15,6 +15,18 @@ inputs:
   cache-dependency-path:
     description: The lock file whose hash keys the cache. Nothing is cached when it does not exist.
     default: astli.lock
+  build-cache:
+    description: Whether to cache builds, so that `astli build`, `run` and `test` skip each top that nothing it reads changed in, and recompile only the C++ that changed in the rest, through ccache.
+    default: 'false'
+  build-cache-size:
+    description: The most the build cache keeps, as ccache's CCACHE_MAXSIZE, unless that is set.
+    default: 500M
+  build-cache-key:
+    description: What tells apart the build caches of jobs of one name, such as the legs of a matrix, which would otherwise save under one key.
+    default: ''
+  build-cache-save:
+    description: Whether to save the build cache at the end of the job, rather than only restore it. By default only a push saves, so that pull requests do not crowd out the default branch's caches.
+    default: ${{ github.event_name == 'push' }}
   annotations:
     description: Whether astli writes diagnostics as workflow commands, which annotate the pull request.
     default: 'true'
@@ -55,8 +67,68 @@ runs:
 
     - id: cache
       if: inputs.cache == 'true' && hashFiles(inputs.cache-dependency-path) != ''
-      uses: actions/cache@v6
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
       with:
         path: ${{ runner.temp }}/astli-cache
         key: astli-${{ runner.os }}-${{ hashFiles(inputs.cache-dependency-path) }}
         restore-keys: astli-${{ runner.os }}-
+
+    - id: build-cache
+      if: inputs.build-cache == 'true'
+      shell: bash
+      env:
+        BUILD_CACHE_SIZE: ${{ inputs.build-cache-size }}
+        BUILD_CACHE_KEY: ${{ inputs.build-cache-key }}
+      run: bash "$GITHUB_ACTION_PATH/build-cache.sh"
+
+    # ccache keys each compile on its input, so whatever the newest run left
+    # is a good start for any change. Only actions/cache saves at the end of
+    # the job, so a run that only restores takes another step.
+    - if: steps.build-cache.outputs.enabled == 'true' && inputs.build-cache-save == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/ccache
+        key: astli-ccache-${{ steps.build-cache.outputs.key }}
+        restore-keys: |
+          astli-ccache-${{ steps.build-cache.outputs.job }}
+          astli-ccache-${{ steps.build-cache.outputs.runner }}
+    - if: steps.build-cache.outputs.enabled == 'true' && inputs.build-cache-save != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ${{ runner.temp }}/ccache
+        key: astli-ccache-${{ steps.build-cache.outputs.key }}
+        restore-keys: |
+          astli-ccache-${{ steps.build-cache.outputs.job }}
+          astli-ccache-${{ steps.build-cache.outputs.runner }}
+
+    # A top whose fingerprint matches, with its executable there, is not
+    # built, so these are all a build needs to be skipped. Whatever else a
+    # build leaves is of no use again: Verilator rewrites every file it
+    # generates, so Make recompiles them all. The fingerprint holds no
+    # compiler, so the runner's OS release is in the key.
+    - if: steps.build-cache.outputs.enabled == 'true' && inputs.build-cache-save == 'true'
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          **/.astli/.gitignore
+          **/.astli/build/**/fingerprint
+          **/.astli/build/**/V*
+          !**/.astli/build/**/V*.*
+          !**/.astli/build/**/run
+        key: astli-builds-${{ steps.build-cache.outputs.image }}-${{ steps.build-cache.outputs.key }}
+        restore-keys: |
+          astli-builds-${{ steps.build-cache.outputs.image }}-${{ steps.build-cache.outputs.job }}
+          astli-builds-${{ steps.build-cache.outputs.image }}-${{ steps.build-cache.outputs.runner }}
+    - if: steps.build-cache.outputs.enabled == 'true' && inputs.build-cache-save != 'true'
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: |
+          **/.astli/.gitignore
+          **/.astli/build/**/fingerprint
+          **/.astli/build/**/V*
+          !**/.astli/build/**/V*.*
+          !**/.astli/build/**/run
+        key: astli-builds-${{ steps.build-cache.outputs.image }}-${{ steps.build-cache.outputs.key }}
+        restore-keys: |
+          astli-builds-${{ steps.build-cache.outputs.image }}-${{ steps.build-cache.outputs.job }}
+          astli-builds-${{ steps.build-cache.outputs.image }}-${{ steps.build-cache.outputs.runner }}
