@@ -24,7 +24,7 @@ jobs:
         with:
           cache-dependency-path: test/astli.lock
 
-      # A second run finds the binary in the tool cache.
+      # A second run installs over the first.
       - uses: ./
         with:
           version: ${{ steps.astli.outputs.version }}
