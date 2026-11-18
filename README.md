@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: fischeti/astli-action@v0.6.0
+      - uses: fischeti/astli-action@v0.6.1
       - run: astli fmt --check
       - run: astli lint --locked
       - run: astli check --locked --top soc_top
@@ -62,7 +62,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: fischeti/astli-action@v0.6.0
+      - uses: fischeti/astli-action@v0.6.1
         with:
           build-cache: true
       - run: sudo apt-get install -y verilator
