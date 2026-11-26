@@ -1,7 +1,7 @@
 # Follows astli's releases: pins the newest version and tags it. Polling the
 # release rather than being notified by the astli repository needs no token of
-# its own. dist uploads the binaries after it creates the release, so a release
-# is taken only once every artifact its manifest names is there.
+# its own. astli's releases are immutable, so one is published with every
+# binary attached, and the latest is complete as soon as it is listed.
 name: Bump
 
 on:
@@ -21,28 +21,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          release=$(gh api repos/fischeti/astli/releases/latest)
-          latest=$(jq -r '.tag_name | ltrimstr("v")' <<<"$release")
+          latest=$(gh api repos/fischeti/astli/releases/latest --jq '.tag_name | ltrimstr("v")')
           # The `version` input's default alone, since other inputs have
           # defaults of their own.
           version='/^  version:$/,/^  [^ ]/'
           current=$(sed -n "${version}s/^    default: \\(.*\\)\$/\\1/p" action.yml)
           if [ "$(printf '%s\n' "$current" "$latest" | sort -V | tail -n 1)" = "$current" ]; then
             echo "astli $current is the latest"
-            exit 0
-          fi
-          # The manifest names every artifact dist builds, among them the
-          # installer and each archive it may download.
-          if ! jq -e 'any(.assets[]; .name == "dist-manifest.json")' <<<"$release" >/dev/null; then
-            echo "astli $latest has no dist-manifest.json yet"
-            exit 0
-          fi
-          manifest=$(gh release download "v$latest" -R fischeti/astli -p dist-manifest.json -O -)
-          missing=$(jq -r --argjson release "$release" \
-            '[$release.assets[].name] as $have | .artifacts | keys[] | select(. as $name | $have | index($name) | not)' \
-            <<<"$manifest")
-          if [ -n "$missing" ]; then
-            echo "astli $latest has none of $missing yet"
             exit 0
           fi
           sed -i "${version}s/^    default: $current\$/    default: $latest/" action.yml
